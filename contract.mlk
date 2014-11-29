@@ -1,0 +1,16 @@
+﻿{ x, y => z, w }
+
+Lambda(2,
+	Name(x), // Validated as Name
+	Name(y), // Validated as Name
+	Name(z),
+	Name(w))
+
+{ x = 1, y = 2 }
+
+Lambda(0, Match(Name(x), 1), Match(Name(y), 2))
+
+
+(1 + 2) + 3
+
+Op(Op(1, 2), 3)
