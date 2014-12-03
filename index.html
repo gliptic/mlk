@@ -3,19 +3,25 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <title>TypeScript HTML App</title>
+    <title>MlkScape</title>
     <link rel="stylesheet" href="app.css" type="text/css" />
-    <script src="amd.js"></script>
-    <!--<script src="transducers.js"></script>
-    <script src="parser.js"></script>
-    <script src="app.js"></script>-->
-    <script type="text/javascript">
-        require(["app"], function (app) { console.log('Loaded'); });
-    </script>
+    <link rel="stylesheet" href="codemirror.css" type="text/css" />
+    <script src="codemirror-compressed.js"></script>
+    <script data-main="app.js" src="amd.js"></script>
 </head>
 <body>
-    <h1>TypeScript HTML App</h1>
+    <div class="section group">
+        <div class="col span_1_of_2">
+            <div id="content" class="half-pane">
+            </div>
+            
+        </div>
+        <div class="col span_1_of_2" style="position: relative">
+            <div id="result" class="half-pane" style="padding: 0.5rem">
 
-    <div id="content"></div>
+            </div>
+            <input type="button" class="btn-round refresh" id="compile" style="z-index: 10; position: absolute; left: 1.5rem; bottom: 2.5rem" />
+        </div>
+    </div>
 </body>
 </html>

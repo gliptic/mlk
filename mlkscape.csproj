@@ -20,12 +20,17 @@
   <ItemGroup>
     <Content Include="amd.js" />
     <Content Include="app.css" />
+    <Content Include="codemirror-compressed.js" />
+    <Content Include="codemirror.css" />
+    <Content Include="ic_refresh_grey600_24dp.png" />
     <Content Include="index.html" />
     <Content Include="web.config" />
   </ItemGroup>
   <ItemGroup>
     <TypeScriptCompile Include="app.ts" />
+    <TypeScriptCompile Include="ast.ts" />
     <TypeScriptCompile Include="parser.ts" />
+    <TypeScriptCompile Include="compiler.ts" />
     <TypeScriptCompile Include="transducers.ts" />
   </ItemGroup>
   <ItemGroup>

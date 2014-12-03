@@ -269,9 +269,8 @@ Map.prototype.step = function (res, input) {
     return this.xform.step(res, this.f(input));
 };
 
-// :T => T
-
-export function map<T>(f:(T) => T, ctx?);
+export function map<T>(f: (x: T) => T, ctx?);
+export function map<T>(coll: T[], f: (x: T) => T, ctx?): T[];
 export function map(coll, f, ctx?) {
     if (isFunction(coll)) { ctx = f; f = coll; coll = null; }
     f = bound(f, ctx);
