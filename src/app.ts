@@ -1,13 +1,18 @@
 ﻿declare var CodeMirror;
 
 import parser = require("parser");
+import compiler = require("compiler");
 
 export function runCode(code: string): any {
     console.log('Loaded app');
 
     var p = new parser.AstParser(code);
+    var m = p.ruleModule();
 
-    return p.ruleModule();
+    var c = new compiler.Compiler();
+
+    c.resolve(m);
+    return m;
 }
 
 function ready(f) {

@@ -1,0 +1,40 @@
+﻿body {
+    background: #FFF3E0;
+}
+
+.half-pane {
+    background: #fff;
+}
+
+.btn-round {
+    background: #ffcc80;
+}
+
+.flat-button {
+    background: #fff;
+}
+
+.refresh {
+    background: #ffcc80 url(ic_refresh_grey600_24dp.png) no-repeat center;
+}
+
+.CodeMirror-gutters {
+    background-color: #FFE082;
+}
+
+.CodeMirror-linenumber {
+    color: #999;
+}
+
+.CodeMirror-scrollbar-filler, .CodeMirror-gutter-filler {
+    background-color: white; /* The little square between H and V scrollbars */
+}
+
+.CodeMirror {
+    background: white;
+    color: black;
+}
+
+.CodeMirror div.CodeMirror-cursor {
+    border-left: 1px solid black;
+}

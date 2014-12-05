@@ -183,17 +183,17 @@ export function astPostorder(x: Ast, f: (x: Ast) => Ast): Ast {
     return f(x) || x;
 }
 
-enum TraverseKind {
+export enum TraverseKind {
     Value,
     Pattern,
     Name,
     Type
 }
 
-export function traverse(x: Ast, kind: TraverseKind, enter: (x: Ast) => any, exit?: (x: Ast) => any): any {
+export function traverse(x: Ast, kind: TraverseKind, enter: (x: Ast, kind?: TraverseKind) => any, exit?: (x: Ast, kind?: TraverseKind) => any): any {
     if (!x)
         return;
-    if (enter(x))
+    if (enter(x, kind))
         return true;
 
     switch (x.kind) {
@@ -252,7 +252,7 @@ export function traverse(x: Ast, kind: TraverseKind, enter: (x: Ast) => any, exi
         }
     }
 
-    return exit && exit(x);
+    return exit && exit(x, kind);
 }
 
 interface Context {
@@ -774,6 +774,7 @@ export class AstParser {
         console.log(r);
         this.expect(Token.Eof);
         var m = <Module>r;
+        m.kind = AstKind.Lambda;
         m.name = "";
         return m;
     }

@@ -1,6 +1,6 @@
 ﻿import P = require("parser")
 
-class Compiler {
+export class Compiler {
     mods: P.Module[];
 
     constructor() {
@@ -8,14 +8,14 @@ class Compiler {
     }
 
     resolve(m: P.Ast) {
-        P.astPostorder(m, a => {
+        P.traverse(m, P.TraverseKind.Value, (a, k) => {
             switch (a.kind) {
                 case P.AstKind.Name: {
                     var name = <P.AstName>a;
+                    console.log(name.name);
                     break;
                 }
             }
-            return null;
         });
     }
 }

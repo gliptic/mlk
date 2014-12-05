@@ -22,8 +22,10 @@
     <Content Include="app.css" />
     <Content Include="codemirror-compressed.js" />
     <Content Include="codemirror.css" />
+    <Content Include="dark-theme.css" />
     <Content Include="ic_refresh_grey600_24dp.png" />
     <Content Include="index.html" />
+    <Content Include="light-theme.css" />
     <Content Include="web.config" />
   </ItemGroup>
   <ItemGroup>
