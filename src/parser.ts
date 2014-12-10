@@ -51,6 +51,7 @@ export enum AstKind {
 
 export interface Ast {
     kind: AstKind;
+    type?: AstType;
 }
 
 export interface AstName extends Ast {
@@ -78,6 +79,10 @@ export interface AstLambda extends Ast {
 
 export interface AstRecord extends Ast {
     f: FieldPair[];
+}
+
+export interface AstTypeVal extends Ast {
+    typeVal: AstType;
 }
 
 export interface FieldPair {
@@ -121,7 +126,9 @@ export enum AstTypeKind {
     Name,
     App,
     Lambda,
-    Record
+    Record,
+    TypeVal,
+    Named
 }
 
 export interface AstType {
@@ -130,6 +137,10 @@ export interface AstType {
 
 export interface AstTypeName extends AstType {
     name: string;
+}
+
+export interface AstTypeNamed extends AstType {
+
 }
 
 export interface AstTypeLambda extends AstType {
@@ -188,6 +199,88 @@ export enum TraverseKind {
     Pattern,
     Name,
     Type
+}
+
+function traverseArray<T>(arr: T[], f: (x: T) => any): any {
+    for (var i = 0, e = arr.length; i < e; ++i) {
+        var v = f(arr[i]);
+        if (v)
+            return v;
+    }
+}
+
+export function traverseValues(x: Ast, f: (x: Ast) => any) {
+    switch (x.kind) {
+        case AstKind.App: {
+            var app = <AstApp>x;
+            return f(app.f)
+                 || traverseArray(app.params, x => f(x.value));
+        }
+
+        case AstKind.Match: {
+            var match = <AstMatch>x;
+
+            return f(match.value);
+        }
+
+        case AstKind.Lambda: {
+            var lambda = <AstLambda>x;
+
+            return traverseArray(lambda.p, x => f(x.value))
+                || traverseArray(lambda.f, x => f(x.value));
+        }
+
+        case AstKind.Record: {
+            var record = <AstRecord>x;
+
+            return traverseArray(record.f, x => f(x.value));
+        }
+
+        case AstKind.Name:
+        case AstKind.ConstNum:
+        case AstKind.AstTypeVal:
+            return;
+
+        default:
+            throw "Unimplemented in traverseValues";
+    }
+}
+
+export function traversePatterns(x: Ast, f: (x: Ast) => any) {
+    switch (x.kind) {
+        case AstKind.App: {
+            var app = <AstApp>x;
+            return f(app.f)
+                || traverseArray(app.params, x => f(x.name));
+        }
+
+        case AstKind.Match: {
+            var match = <AstMatch>x;
+
+            return f(match.pattern);
+        }
+
+        case AstKind.Lambda: {
+            var lambda = <AstLambda>x;
+
+            return traverseArray(lambda.p, x => f(x.name))
+                || traverseArray(lambda.f, x => f(x.name));
+        }
+
+        case AstKind.Record: {
+            var record = <AstRecord>x;
+
+            return traverseArray(record.f, x => f(x.name));
+        }
+
+        case AstKind.Name:
+        case AstKind.ConstNum:
+        case AstKind.AstTypeVal:
+            return;
+
+        default:
+            throw "Unimplemented in traversePatterns";
+    }
 }
 
 export function traverse(x: Ast, kind: TraverseKind, enter: (x: Ast, kind?: TraverseKind) => any, exit?: (x: Ast, kind?: TraverseKind) => any): any {
@@ -622,7 +715,7 @@ export class AstParser {
             case Token.Colon:
                 this.next();
                 var t = this.typeExpression();
-                ret = { kind: AstKind.AstTypeVal, type: t };
+                ret = { kind: AstKind.AstTypeVal, typeVal: t };
                 break;
             case Token.LParen:
                 this.next();

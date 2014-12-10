@@ -1,4 +1,18 @@
-﻿foo {
-	x = 1
-	y = 2
-}
+﻿f(x = 1) // f: { x: Int => () }
+f[x = 1] // f: { _: [x: Int] => () }
+
+y = (x = 1) // y: Option [x: Int]
+y = [x = 1] // y: [x: Int]
+
+f = { Baz }
+Boo = :type [x:Int]
+
+A = :Option(B) // Invalid. Anonymous types are resolved and interned immediately and do not admit cycles.
+B = :Option(A)
+
+// type delays resolving of composite types and acts as a nominal type
+A = :type Option(B)
+B = :type Option(A)
+
+// Lambda acts as 
+f = { x }
