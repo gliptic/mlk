@@ -3,13 +3,18 @@
 import parser = require("parser");
 import compiler = require("compiler");
 
-export function runCode(code: string): any {
+export function runCode(code: string, output: (x: string) => void): any {
     console.log('Loaded app');
 
-    var p = new parser.AstParser(code);
-    var m = p.ruleModule();
+    try {
+        var p = new parser.AstParser(code);
+        var m = p.ruleModule();
 
-    var c = new compiler.Compiler();
+        var c = new compiler.Compiler();
+        output(JSON.stringify(m));
+    } catch (e) {
+        output("Compile error: " + e);
+    }
 
     c.resolve(m);
     return m;
@@ -32,8 +37,8 @@ ready(() => {
     });
     document.getElementById("compile").addEventListener('click', function () {
         var code = codeMirror.getValue();
+        var result = document.getElementById("result");
 
-        var tree = runCode(code);
-        document.getElementById("result").innerHTML = JSON.stringify(tree);
+        var tree = runCode(code, (s) => result.innerText = s);
     });
 });

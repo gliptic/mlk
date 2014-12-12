@@ -307,7 +307,8 @@ Filter.prototype.step = function (res, input) {
     return res;
 };
 
-export function filter(f, ctx?);
+export function filter<T>(coll: T[], f: (x:T) => boolean, ctx?)
+export function filter<T>(f: (x:T) => boolean, ctx?);
 export function filter(coll, f, ctx?) {
     if (isFunction(coll)) { ctx = f; f = coll; coll = null; }
     f = bound(f, ctx);
