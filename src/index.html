@@ -8,21 +8,11 @@
     <link rel="stylesheet" href="codemirror.css" type="text/css" />
     <link id="themecss" rel="stylesheet" href="light-theme.css" type="text/css" />
     <script src="codemirror-compressed.js"></script>
+    <script src="mithril.js"></script>
+    <script src="mithril.animate.min.js"></script>
     <script data-main="app.js" src="amd.js"></script>
 </head>
 <body>
-    <div class="section group">
-        <div class="col span_1_of_2">
-            <div id="content" class="half-pane">
-            </div>
-            
-        </div>
-        <div class="col span_1_of_2" style="position: relative">
-            <div id="result" class="half-pane" style="padding: 0.5rem">
-
-            </div>
-            <input type="button" class="btn-round refresh" id="compile" style="z-index: 10; position: absolute; left: 1.5rem; bottom: 2.5rem" />
-        </div>
-    </div>
+    <div id="root" class="section group"></div>
 </body>
 </html>

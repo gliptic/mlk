@@ -10,6 +10,8 @@ var charA = 'A'.charCodeAt(0);
 var charZ = 'Z'.charCodeAt(0);
 var char0 = '0'.charCodeAt(0);
 var char9 = '9'.charCodeAt(0);
+var charApostrophe = '\''.charCodeAt(0);
+var charQuote = '"'.charCodeAt(0);
 var isWhitespace = [];
 isWhitespace[Space] = true;
 isWhitespace[Tab] = true;
@@ -26,6 +28,7 @@ export enum Token {
     TypeIdent,
     OpIdent,
     ConstInt,
+    ConstString,
     LBrace,
     RBrace,
     LParen,
@@ -41,12 +44,15 @@ export enum Token {
 // Ast
 export enum AstKind {
     ConstNum,
+    ConstString,
     Name,
     Match,
     App,
     Lambda,
     Record,
-    AstTypeVal
+    ValRef,
+    TypeVal,
+    
 }
 
 export interface Ast {
@@ -85,9 +91,14 @@ export interface AstTypeVal extends Ast {
     typeVal: AstType;
 }
 
+export interface AstValRef extends Ast {
+    name: string;
+}
+
 export interface FieldPair {
     name: Ast;
     value: Ast;
+    type?: AstType;
 }
 
 function astName(name: string): AstName {
@@ -157,13 +168,13 @@ export interface AstTypeApp extends AstType {
     params: TypeFieldPair[];
 }
 
-function addTypeParameters(dest: AstType, params: TypeFieldPair[]): AstType {
+function addTypeParameters(dest: AstType, params: TypeFieldPair[]): AstTypeApp {
     if (dest.kind === AstTypeKind.App) {
         var a = <AstTypeApp>dest;
         a.params = a.params.concat(params);
         return a;
     } else {
-        return { kind: AstTypeKind.App, params: params };
+        return { kind: AstTypeKind.App, f: dest, params: params };
     }
 }
 
@@ -238,7 +249,7 @@ export function traverseValues(x: Ast, f: (x: Ast) => any) {
 
         case AstKind.Name:
         case AstKind.ConstNum:
-        case AstKind.AstTypeVal:
+        case AstKind.TypeVal:
             return;
 
         default:
@@ -275,7 +286,7 @@ export function traversePatterns(x: Ast, f: (x: Ast) => any) {
 
         case AstKind.Name:
         case AstKind.ConstNum:
-        case AstKind.AstTypeVal:
+        case AstKind.TypeVal:
             return;
 
         default:
@@ -499,6 +510,26 @@ export class AstParser {
                 case ',': this.tt = Token.Comma; break;
                 case '.': this.tt = Token.Dot; break;
                 case '|': this.tt = Token.Bar; break;
+                case '\'':
+                    var ident = '';
+                    while (this.c != charApostrophe && this.c) {
+                        ident += String.fromCharCode(this.c);
+                        this.nextch();
+                    }
+                    this.nextch();
+                    this.tokenData = ident;
+                    this.tt = Token.Ident;
+                    break;
+                case '"':
+                    var ident = '';
+                    while (this.c != charQuote && this.c) { // TODO: Escape seqs
+                        ident += String.fromCharCode(this.c);
+                        this.nextch();
+                    }
+                    this.nextch();
+                    this.tokenData = ident;
+                    this.tt = Token.ConstString;
+                    break;
                 case '_': this.tt = Token.Underscore; break;
                 default:
                     var prec = this.precedence[cnum];
@@ -529,11 +560,11 @@ export class AstParser {
         }
     }
 
-    private expect(t: Token) {
+    private expect(t: Token): any {
         if (this.tt !== t) {
             throw 'Parse error. Expected ' + Token[t] + ', got ' + Token[this.tt];
         }
-        this.next();
+        return this.next();
     }
 
     private test(t: Token): boolean {
@@ -659,7 +690,6 @@ export class AstParser {
             }
 
             var e = this.typeExpressionOrBinding();
-            console.log("After typeExpressionOrBinding:", Token[this.tt]);
 
             fields.push(e);
 
@@ -708,6 +738,9 @@ export class AstParser {
             case Token.ConstInt:
                 ret = { kind: AstKind.ConstNum, value: <number>this.next() };
                 break;
+            case Token.ConstString:
+                ret = { kind: AstKind.ConstString, value: <string>this.next() };
+                break;
             case Token.Ident:
             case Token.TypeIdent:
                 ret = { kind: AstKind.Name, name: <string>this.next() };
@@ -715,7 +748,7 @@ export class AstParser {
             case Token.Colon:
                 this.next();
                 var t = this.typeExpression();
-                ret = { kind: AstKind.AstTypeVal, typeVal: t };
+                ret = { kind: AstKind.TypeVal, typeVal: t };
                 break;
             case Token.LParen:
                 this.next();
@@ -727,6 +760,31 @@ export class AstParser {
                 break;
             case Token.LBracket:
                 ret = this.ruleRecord(Token.LBracket, Token.RBracket);
+                break;
+            case Token.OpIdent:
+                if (this.tokenData === '<') {
+                    this.next();
+                    var tagName = <string>this.expect(Token.Ident);
+                    var args: FieldPair[] = [];
+                    while (this.tt === Token.Ident) {
+                        var attrName = this.next();
+                        this.expect(Token.Equal);
+                        var attrValue = this.rulePrimaryExpression(true);
+                        args.push({ name: attrName, value: attrValue });
+                    }
+
+                    // <a b=c />  ->  a(b = c)
+
+                    var data = <string>this.expect(Token.OpIdent);
+                    if (data === '/>') {
+                        ret = astApp(astName(tagName), args);
+                    } else if (data === '>') {
+                        throw "Unimplemented: nested markup tags";
+                    }
+                } else {
+                    // TODO
+                    throw "Unimplemented: unary op";
+                }
                 break;
             default:
                 throw "Unexpected token " + Token[this.tt] + " in primary expression";
@@ -760,6 +818,7 @@ export class AstParser {
                 case Token.LBracket:
                 case Token.LBrace:
                 case Token.Ident:
+                case Token.TypeIdent:
                     var e = this.rulePrimaryExpression(false);
                     ret = addParameters(ret, [{ name: null, value: e }]);
                     break;
@@ -787,6 +846,10 @@ export class AstParser {
             lhs = astApp(astName(op), [{ name: null, value: rhs }, { name: null, value: lhs }]);
         }
 
+        if (this.test(Token.Colon)) {
+            lhs.type = this.typeExpression();
+        }
+
         return lhs;
     }
 
@@ -802,6 +865,7 @@ export class AstParser {
         }
         
         // TODO: Types
+
         
         return e;
     }
@@ -809,9 +873,15 @@ export class AstParser {
     ruleExpressionOrBinding(): FieldPair {
         var e = <AstMatch>this.ruleExpression();
         if (e.kind === AstKind.Match) {
-            return { name: e.pattern, value: e.value };
+            return { name: e.pattern, value: e.value, type: e.type };
+        /*
+        } else if (e.type && e.kind === AstKind.Name) { // TODO: Handle other patterns than names
+            var type = e.type;
+            e.type = null; // Don't leave traces in pattern
+            return { name: e, value: e.value, type: e.type };
+            */
         } else {
-            return { name: null, value: e };
+            return { name: null, value: e, type: e.type };
         }
     }
 
@@ -849,9 +919,15 @@ export class AstParser {
                 }
                 seenParams = true;
                 params = td.map(fields, x => {
-                    if (x.value.kind !== AstKind.Name) { throw "Expected name"; }
-                    return { name: x.value, value: null };
+                    if (x.name && x.name.kind === AstKind.Name) {
+                        return { name: x.name, value: x.value, type: x.type };
+                    }
+                    if (x.value && x.value.kind === AstKind.Name) {
+                        return { name: x.value, value: null, type: x.type };
+                    }
+                    throw "Expected name";
                 });
+                fields.length = 0;
             } else if (this.tt !== Token.Comma) {
                 break;
             }

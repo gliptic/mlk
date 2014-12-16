@@ -83,6 +83,56 @@ body {
     outline: none !important;
 }
 
+.form-control {
+    color: rgba(0, 0, 0, 0.84);
+    height: 28px;
+    outline: none;
+    padding: 0;
+    float: none;
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    background: transparent;
+    border-bottom: 1px solid #757575;
+}
+
+.dropdownjs {
+    position: relative;
+}
+
+.dropdownjs > ul {
+    background: #fff;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12), 0 1px 6px rgba(0, 0, 0, 0.12);
+    transition: transform 0.2s ease-out;
+    padding: 10px;
+    overflow: auto;
+    position: absolute;
+    margin: 0;
+    min-width: 200px;
+    z-index: 10000;
+}
+
+.dropdownjs > ul[placement=bottom-left] {
+    transform-origin: top left;
+    top: 0;
+    left: 0;
+}
+
+.dropdownjs > ul > li.selected,
+.dropdownjs > ul > li:active {
+    background-color: #eaeaea;
+}
+
+.dropdownjs > ul > li {
+    cursor: pointer;
+    list-style: none;
+    padding: 10px 20px;
+}
+
+.dropdownjs * {
+    box-sizing: border-box;
+}
+
 /*  SECTIONS  */
 .section {
 	clear: both;

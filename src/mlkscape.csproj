@@ -26,11 +26,12 @@
     <Content Include="ic_refresh_grey600_24dp.png" />
     <Content Include="index.html" />
     <Content Include="light-theme.css" />
+    <Content Include="mithril.js" />
     <Content Include="web.config" />
   </ItemGroup>
   <ItemGroup>
     <TypeScriptCompile Include="app.ts" />
-    <TypeScriptCompile Include="ast.ts" />
+    <TypeScriptCompile Include="mithril.d.ts" />
     <TypeScriptCompile Include="parser.ts" />
     <TypeScriptCompile Include="compiler.ts" />
     <TypeScriptCompile Include="transducers.ts" />
