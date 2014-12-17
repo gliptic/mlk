@@ -22,7 +22,7 @@
 /* GUTTER */
 
 .CodeMirror-gutters {
-  border-right: 1px solid #ddd;
+  border-right: 1px solid #DCEDC8;
   white-space: nowrap;
 }
 .CodeMirror-linenumbers {}

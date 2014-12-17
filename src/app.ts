@@ -55,7 +55,7 @@ module List {
                     type: 'text',
                     onclick: () => ctrl.visible = true,
                     readOnly: true,
-                    placeholder: 'Examples',
+                    value: 'Examples',
                     'class': 'form-control focus'
                 }),
                 ctrl.visible ?
@@ -87,20 +87,24 @@ var app = {
     },
     view: function (ctrl) {
         return [
-            m('div', { class: 'col span_1_of_2' }, [
-                m('div', { 'class': 'half-pane', config: initCodeMirror })
-            ]),
-            m('div', { class: 'col span_1_of_2' }, [
-                m('div', { 'class': 'half-pane', style: 'position: relative; padding: 0.5rem' }, [
-                    ctrl.result(),
-                    m('input', {
-                        type: 'button',
-                        onclick: () => ctrl.compile(ctrl),
-                        'class': 'btn-round refresh',
-                        style: 'z-index: 10; position: absolute; left: 1.5rem; bottom: 1.5rem'
-                    })
-                ]),
+            m('.header-panel.shadow-z2', [
                 List.view(ctrl.exampleList)
+            ]),
+            m('.section.group', { style: { padding: '0rem 5rem' } }, [
+                m('div', { class: 'col span_1_of_2' }, [
+                    m('div', { 'class': 'half-pane', config: initCodeMirror })
+                ]),
+                m('div', { class: 'col span_1_of_2' }, [
+                    m('div', { 'class': 'half-pane', style: 'position: relative; padding: 0.5rem' }, [
+                        ctrl.result(),
+                        m('input', {
+                            type: 'button',
+                            onclick: () => ctrl.compile(ctrl),
+                            'class': 'btn-round refresh',
+                            style: 'z-index: 10; position: absolute; left: 1.5rem; bottom: 1.5rem'
+                        })
+                    ])
+                ])
             ])
         ];
     }

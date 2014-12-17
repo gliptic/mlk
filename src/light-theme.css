@@ -1,5 +1,5 @@
 ﻿body {
-    background: #FFF3E0;
+    background: #F1F8E9;
 }
 
 .half-pane {
@@ -7,7 +7,7 @@
 }
 
 .btn-round {
-    background: #ffcc80;
+    background: #7CB342;
 }
 
 .flat-button {
@@ -15,11 +15,11 @@
 }
 
 .refresh {
-    background: #ffcc80 url(ic_refresh_grey600_24dp.png) no-repeat center;
+    background: #7CB342 url(ic_refresh_white_18dp.png) no-repeat center;
 }
 
 .CodeMirror-gutters {
-    background-color: #FFE082;
+    background-color: #DCEDC8;
 }
 
 .CodeMirror-linenumber {
