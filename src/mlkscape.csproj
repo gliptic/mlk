@@ -25,7 +25,6 @@
     <Content Include="dark-theme.css" />
     <Content Include="ic_refresh_grey600_24dp.png" />
     <Content Include="ic_refresh_white_18dp.png" />
-    <Content Include="ic_refresh_white_24dp.png" />
     <Content Include="index.html" />
     <Content Include="light-theme.css" />
     <Content Include="mithril.animate.min.js" />

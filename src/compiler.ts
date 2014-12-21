@@ -76,12 +76,14 @@ export class Compiler {
     }
 
     resolveMatch(name: P.Ast, value: P.Ast) {
-        if (name && name.kind === P.AstKind.Name) {
-            var n = <P.AstName>name;
-            this.addSymbol(n.name, { kind: P.AstKind.ValRef, name: n.name });
-            // TODO: Handle other patterns
-        } else {
-            throw "Unimplemented: patterns";
+        if (name) {
+            if (name.kind === P.AstKind.Name) {
+                var n = <P.AstName>name;
+                this.addSymbol(n.name, { kind: P.AstKind.ValRef, name: n.name });
+                // TODO: Handle other patterns
+            } else {
+                throw "Unimplemented: patterns";
+            }
         }
         
         this.resolve(value, null);

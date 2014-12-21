@@ -10,8 +10,16 @@ var charA = 'A'.charCodeAt(0);
 var charZ = 'Z'.charCodeAt(0);
 var char0 = '0'.charCodeAt(0);
 var char9 = '9'.charCodeAt(0);
+var charDash = '-'.charCodeAt(0);
+var charUnderscore = '_'.charCodeAt(0);
+var charDot = '.'.charCodeAt(0);
 var charApostrophe = '\''.charCodeAt(0);
 var charQuote = '"'.charCodeAt(0);
+var charBackslash = '\\'.charCodeAt(0);
+var charSlash = '/'.charCodeAt(0);
+var charGt = '>'.charCodeAt(0);
+var charLt = '<'.charCodeAt(0);
+var charEqual = '='.charCodeAt(0);
 var isWhitespace = [];
 isWhitespace[Space] = true;
 isWhitespace[Tab] = true;
@@ -25,7 +33,6 @@ export enum Token {
     Bar,
     Underscore,
     Ident,
-    TypeIdent,
     OpIdent,
     ConstInt,
     ConstString,
@@ -38,7 +45,12 @@ export enum Token {
     Equal,
     Arrow,
     Invalid,
-    Eof
+    Eof,
+
+    SlashGt,
+    Gt,
+    Lt,
+    LtSlash
 }
 
 // Ast
@@ -249,11 +261,12 @@ export function traverseValues(x: Ast, f: (x: Ast) => any) {
 
         case AstKind.Name:
         case AstKind.ConstNum:
+        case AstKind.ConstString:
         case AstKind.TypeVal:
             return;
 
         default:
-            throw "Unimplemented in traverseValues";
+            throw "Unimplemented in traverseValues: " + AstKind[x.kind];
     }
 }
 
@@ -373,8 +386,12 @@ export class AstParser {
     sourceLen: number;
     precedence: number[];
     c: number;
-    beginCol: number;
-    col: number;
+    //beginCol: number;
+    tokenBeg: number;
+    //col: number;
+    beginLine: number;
+    //firstOnLinePos: number;
+    firstOnLine: boolean;
     prevIndent: number;
     indents: number[];
     currentLine: number;
@@ -387,7 +404,6 @@ export class AstParser {
         this.sourcePos = 0;
         this.sourceLen = source.length;
         this.precedence = [];
-        this.col = 0;
         this.currentLine = 0;
         this.precedence['='.charCodeAt(0)] = 1;
         this.precedence['<'.charCodeAt(0)] = 2;
@@ -396,93 +412,136 @@ export class AstParser {
         this.precedence['-'.charCodeAt(0)] = 3;
         this.precedence['*'.charCodeAt(0)] = 4;
         this.precedence['/'.charCodeAt(0)] = 4;
+        this.beginLine = 0;
+        this.firstOnLine = true;
 
         this.nextch();
         this.skipWs();
-
+        
         this.indents = [];
-        this.prevIndent = this.beginCol;
+        this.tokenBeg = this.sourcePos - 1;
+        this.prevIndent = this.beginCol();
 
         this.next();
     }
 
-    nextch() {
-        this.c = this.sourcePos >= this.sourceLen ? 0 : this.source.charCodeAt(this.sourcePos++);
-        this.col += this.c == Tab ? 4 : 1;
+    beginCol() {
+        return this.tokenBeg - this.beginLine;
     }
 
-    next(): any {
+    // TODO: This can be called even if no error will ultimately result
+    unexpectedChar() {
+        console.log("Unexpected character", String.fromCharCode(this.c));
+        this.tt = Token.Invalid;
+    }
+
+    nextch() {
+        this.c = this.sourcePos >= this.sourceLen ? 0 : this.source.charCodeAt(this.sourcePos);
+        ++this.sourcePos;
+    }
+
+    nextMarkup(): any {
         var data = this.tokenData;
-        this.beginCol = this.col;
-        this.next2();
+        this.tokenBeg = this.sourcePos - 1;
+
+        if ((this.c >= chara && this.c <= charz)
+         || (this.c >= charA && this.c <= charZ)
+         ||  this.c === charDash || this.c === charUnderscore) {
+            var ident = '';
+            while ((this.c >= chara && this.c <= charz)
+                || (this.c >= charA && this.c <= charZ)
+                ||  this.c === charDash || this.c === charUnderscore) {
+                ident += String.fromCharCode(this.c);
+                this.nextch();
+            }
+
+            this.tokenData = ident;
+            this.tt = Token.Ident;
+        } else if (this.c === charDot) {
+            this.nextch();
+            this.tt = Token.Dot;
+        } else if (this.c === charSlash) {
+            this.nextch();
+            if (this.c === charGt) {
+                this.nextch();
+                this.tt = Token.SlashGt;
+            } else {
+                this.unexpectedChar();
+            }
+        } else if (this.c === charGt) {
+            this.nextch();
+            this.tt = Token.Gt;
+        } else if (this.c === charLt) {
+            this.nextch();
+            if (this.c === charSlash) {
+                this.nextch();
+                this.tt = Token.LtSlash;
+            } else {
+                this.tt = Token.Lt;
+            }
+        } else if (this.c === charEqual) {
+            this.nextch();
+            this.tt = Token.Equal;
+        }
+
         this.skipWs();
         return data;
     }
 
     skipWs() {
-        while (this.c == Space || this.c == Tab) {
+        var newline = false;
+        while (isWhitespace[this.c]) {
+            if (this.c === CR || this.c === LF) {
+                this.beginLine = this.sourcePos;
+                newline = true;
+            }
             this.nextch();
+        }
+
+        if (newline) {
+            this.firstOnLine = true;
         }
     }
 
     beginIndent() {
         this.indents.push(this.prevIndent);
-        this.prevIndent = this.beginCol;
+        this.prevIndent = this.sourcePos - 1 - this.beginLine;
     }
 
     endIndent() {
         this.prevIndent = this.indents.pop();
     }
 
-    next2() {
-        while (isWhitespace[this.c]) {
-            var firstOnLine = false;
-            do {
-                if (this.c === LF) {
-                    console.log('New line');
-                    ++this.currentLine;
-                }
+    unnext() {
+        this.sourcePos = this.tokenBeg;
+        this.c = this.sourcePos >= this.sourceLen ? 0 : this.source.charCodeAt(this.sourcePos);
+        ++this.sourcePos;
+    }
 
-                if (this.c === CR || this.c == LF) {
-                    this.col = -1;
-                    firstOnLine = true;
-                }
+    next() {
+        var data = this.tokenData;
+        this.tokenBeg = this.sourcePos - 1;
 
-                this.nextch();
-
-            } while (isWhitespace[this.c]);
-
-            if (firstOnLine && this.c !== 0) {
-                if (this.col <= this.prevIndent) {
-                    console.log('Insert comma');
-                    this.tt = Token.Comma;
-                    return;
-                }
+        if (this.firstOnLine && this.c !== 0) {
+            if (this.beginCol() <= this.prevIndent) {
+                this.firstOnLine = false;
+                this.tt = Token.Comma;
+                return data;
             }
         }
 
-        if (this.c >= chara && this.c <= charz) {
+        if ((this.c >= chara && this.c <= charz)
+         || (this.c >= charA && this.c <= charZ)
+         ||  this.c === charDot) {
             var ident = '';
-            while ((this.c >= chara && this.c <= charz)
-                || (this.c >= charA && this.c <= charZ)) {
+            do {
                 ident += String.fromCharCode(this.c);
                 this.nextch();
-            }
+            } while ((this.c >= chara && this.c <= charz)
+                  || (this.c >= charA && this.c <= charZ));
 
-            console.log("Ident", ident);
             this.tokenData = ident;
             this.tt = Token.Ident;
-        } else if (this.c >= charA && this.c <= charZ) {
-            var ident = '';
-            while ((this.c >= chara && this.c <= charz)
-                || (this.c >= charA && this.c <= charZ)) {
-                ident += String.fromCharCode(this.c);
-                this.nextch();
-            }
-
-            console.log("TypeIdent", ident);
-            this.tokenData = ident;
-            this.tt = Token.TypeIdent;
         } else if (this.c >= char0 && this.c <= char9) {
             var text = '';
             while ((this.c >= char0 && this.c <= char9)) {
@@ -490,7 +549,6 @@ export class AstParser {
                 this.nextch();
             }
 
-            console.log("Number", ident);
             this.tokenData = +text;
             this.tt = Token.ConstInt;
         } else if (this.c === 0) {
@@ -526,6 +584,8 @@ export class AstParser {
                         ident += String.fromCharCode(this.c);
                         this.nextch();
                     }
+                    if (this.c !== charQuote)
+                        throw "Expected end quote";
                     this.nextch();
                     this.tokenData = ident;
                     this.tt = Token.ConstString;
@@ -543,21 +603,21 @@ export class AstParser {
                         if (ident === '=') {
                             this.tt = Token.Equal;
                         } else if (ident === '=>') {
-                            console.log('Arrow');
                             this.tt = Token.Arrow;
                         } else {
-                            console.log("OpIdent", ident);
                             this.tokenData = ident;
                             this.tokenPrec = prec;
                             this.tt = Token.OpIdent;
                         }
                     } else {
-                        console.log("Unexpected character", cnum);
-                        this.tt = Token.Invalid;
+                        this.unexpectedChar();
                     }
                     break;
             }
         }
+
+        this.skipWs();
+        return data;
     }
 
     private expect(t: Token): any {
@@ -567,51 +627,73 @@ export class AstParser {
         return this.next();
     }
 
+    private expectPeek(t: Token) {
+        if (this.tt !== t) {
+            throw 'Parse error. Expected ' + Token[t] + ', got ' + Token[this.tt];
+        }
+    }
+
+    private expectMarkup(t: Token): any {
+        if (this.tt !== t) {
+            throw 'Parse error. Expected ' + Token[t] + ', got ' + Token[this.tt];
+        }
+        return this.nextMarkup();
+    }
+
     private test(t: Token): boolean {
         return this.tt === t ? (this.next(), true) : false;
     }
 
+    private testMarkup(t: Token): boolean {
+        return this.tt === t ? (this.nextMarkup(), true) : false;
+    }
+
     // Type space
 
-    typePrimaryExpression(parseTrail: boolean): AstType {
+    // Needs this.next() after
+    typePrimaryExpressionDelimited(): AstType {
         var ret: AstType;
         switch (this.tt) {
-            case Token.TypeIdent:
             case Token.Ident:
-                ret = { kind: AstTypeKind.Name, name: <string>this.next() };
+                ret = { kind: AstTypeKind.Name, name: <string>this.tokenData };
                 break;
 
             case Token.LBrace:
-                ret = this.typeLambda();
+                ret = this.typeLambdaDelimited();
                 break;
 
             case Token.LBracket:
-                ret = this.typeRecord(Token.LBracket, Token.RBracket);
+                ret = this.typeRecordDelimited(Token.LBracket, Token.RBracket);
+                break;
+
+            case Token.LParen:
+                this.next();
+                ret = this.typeExpression();
+                this.expectPeek(Token.RParen);
                 break;
 
             default:
                 throw "Unexpected token " + Token[this.tt] + " in primary type expression";
         }
 
-        if (parseTrail)
-            ret = this.typePrimaryExpressionTrail(ret);
-
         return ret;
     }
 
-    typePrimaryExpressionTrail(ret: AstType): AstType {
+    typePrimaryExpressionTail(ret: AstType): AstType {
+        this.next();
         while (true) {
             switch (this.tt) {
                 case Token.LParen:
-                    var r = this.typeRecord(Token.LParen, Token.RParen);
+                    var r = this.typeRecordDelimited(Token.LParen, Token.RParen);
+                    this.next();
                     ret = addTypeParameters(ret, r.f);
                     break;
 
                 case Token.LBracket:
                 case Token.LBrace:
                 case Token.Ident:
-                case Token.TypeIdent:
-                    var e = this.typePrimaryExpression(false);
+                    var e = this.typePrimaryExpressionDelimited();
+                    this.next();
                     ret = addTypeParameters(ret, [{ name: null, type: e, value: null }]);
                     break;
 
@@ -622,7 +704,8 @@ export class AstParser {
     }
 
     typeExpression(): AstType {
-        var p = this.typePrimaryExpression(true);
+        var p = this.typePrimaryExpressionDelimited();
+        p = this.typePrimaryExpressionTail(p);
 
         if (this.tt === Token.Bar) {
             var v = [];
@@ -710,116 +793,165 @@ export class AstParser {
         return { p: params, f: fields };
     }
 
-    typeLambda() {
+    // Needs this.next() after
+    typeLambdaDelimited() {
         this.expect(Token.LBrace);
         var r = <AstTypeLambda>this.typeLambdaBody();
-        this.expect(Token.RBrace);
+        this.expectPeek(Token.RBrace);
         r.kind = AstTypeKind.Lambda;
         return r;
     }
 
-    typeRecord(l: Token, r: Token): AstTypeRecord {
+    // Needs this.next() after
+    typeRecordDelimited(l: Token, r: Token): AstTypeRecord {
         this.expect(l);
         var b = this.typeLambdaBody();
         if (b.p.length)
             throw "Parameters not allowed in a record"; // TODO: Pass whether parameters are allowed to typeLambdaBody
-        this.expect(r);
+        this.expectPeek(r);
         delete b.p;
         var rec = <AstTypeRecord><any>b;
         rec.kind = AstTypeKind.Record;
         return rec;
     }
 
-    // Value space
+    rulePrimaryMarkupDelimited(): Ast {
+        this.nextMarkup();
+        var tagName: string;
+        if (this.tt === Token.Ident) {
+            tagName = <string>this.nextMarkup();
+        }
 
-    rulePrimaryExpression(parseTrail: boolean): Ast {
-        var ret: Ast;
+        var classes = '';
+        var classMode = false;
+
+        while (true) {
+            if (this.tt === Token.Dot) {
+                this.nextMarkup();
+                if (this.tt !== Token.Ident)
+                    throw 'Expected class name';
+                classes += ' ' + this.nextMarkup();
+                classMode = true;
+            } else {
+                break;
+            }
+        }
+
+        var args: FieldPair[] = [];
+
+        if (classes) {
+            args.push({ name: astName('class'), value: <Ast>{ kind: AstKind.ConstString, value: classes } });
+        }
+
+        while (this.tt === Token.Ident) {
+            var attrName = <string>this.nextMarkup();
+            this.expectPeek(Token.Equal);
+            this.next();
+            var attrValue = this.rulePrimaryExpressionDelimited();
+            this.nextMarkup();
+            args.push({ name: astName(attrName), value: attrValue });
+        }
+
+        // <a b=c />  ->  a(b = c)
+
+        if (this.tt === Token.SlashGt) {
+            /* Nothing to do */
+        } else if (this.test(Token.Gt)) { // We use normal lexer here because it can handle <, </ and primary expressions
+            var children: FieldPair[] = [];
+            while (true) {
+                var child;
+                if (this.tt === Token.OpIdent && this.tokenData === '<') {
+                    child = this.rulePrimaryMarkupDelimited();
+                    this.next();
+                } else if (this.tt === Token.OpIdent && this.tokenData === '</') {
+                    this.nextMarkup();
+                    var endTagName = this.expectMarkup(Token.Ident);
+                    if (tagName !== endTagName) {
+                        throw "Mismatch in end tag. Expected " + tagName + ", got " + endTagName;
+                    }
+                    this.expectPeek(Token.Gt); // Delimited
+                    break;
+                } else {
+                    child = this.rulePrimaryExpressionDelimited();
+                    this.next();
+                }
+
+                children.push({
+                    name: null, value: child
+                });
+            }
+            args.push({ name: astName('children'), value: { kind: AstKind.Record, f: children } });
+        } else {
+            throw "Expected end of tag";
+        }
+
+        return astApp(astName(tagName), args);
+    }
+
+    // Value space
+    // Needs this.next() after
+    rulePrimaryExpressionDelimited(): Ast {
         switch (this.tt) {
-            case Token.ConstInt:
-                ret = { kind: AstKind.ConstNum, value: <number>this.next() };
-                break;
-            case Token.ConstString:
-                ret = { kind: AstKind.ConstString, value: <string>this.next() };
-                break;
-            case Token.Ident:
-            case Token.TypeIdent:
-                ret = { kind: AstKind.Name, name: <string>this.next() };
-                break;
+            case Token.ConstInt:    return { kind: AstKind.ConstNum, value: <number>this.tokenData };
+            case Token.ConstString: return { kind: AstKind.ConstString, value: <string>this.tokenData };
+            case Token.Ident:       return { kind: AstKind.Name, name: <string>this.tokenData };
             case Token.Colon:
                 this.next();
-                var t = this.typeExpression();
-                ret = { kind: AstKind.TypeVal, typeVal: t };
-                break;
+                var t = this.typePrimaryExpressionDelimited();
+                return { kind: AstKind.TypeVal, typeVal: t };
             case Token.LParen:
                 this.next();
-                ret = this.ruleExpression();
-                this.expect(Token.RParen);
-                break;
+                var ret = this.ruleExpression();
+                this.expectPeek(Token.RParen);
+                return ret;
             case Token.LBrace:
-                ret = this.ruleLambda();
-                break;
+                return this.ruleLambdaDelimited();
             case Token.LBracket:
-                ret = this.ruleRecord(Token.LBracket, Token.RBracket);
-                break;
+                return this.ruleRecordDelimited(Token.LBracket, Token.RBracket);
             case Token.OpIdent:
                 if (this.tokenData === '<') {
-                    this.next();
-                    var tagName = <string>this.expect(Token.Ident);
-                    var args: FieldPair[] = [];
-                    while (this.tt === Token.Ident) {
-                        var attrName = this.next();
-                        this.expect(Token.Equal);
-                        var attrValue = this.rulePrimaryExpression(true);
-                        args.push({ name: attrName, value: attrValue });
-                    }
-
-                    // <a b=c />  ->  a(b = c)
-
-                    var data = <string>this.expect(Token.OpIdent);
-                    if (data === '/>') {
-                        ret = astApp(astName(tagName), args);
-                    } else if (data === '>') {
-                        throw "Unimplemented: nested markup tags";
-                    }
+                    return this.rulePrimaryMarkupDelimited();
                 } else {
                     // TODO
                     throw "Unimplemented: unary op";
                 }
-                break;
             default:
                 throw "Unexpected token " + Token[this.tt] + " in primary expression";
         }
-
-        if (parseTrail)
-            ret = this.rulePrimaryExpressionTrail(ret);
-        return ret;
     }
 
-    ruleRecord(l: Token, r: Token): AstRecord {
+    // Needs this.next() after
+    ruleRecordDelimited(l: Token, r: Token): AstRecord {
         this.expect(l);
         var b = this.ruleLambdaBody();
         if (b.p.length)
             throw "Parameters not allowed in a record"; // TODO: Pass whether parameters are allowed to ruleLambdaBody
-        this.expect(r);
+        this.expectPeek(r);
         delete b.p;
         var rec = <AstRecord><any>b;
         rec.kind = AstKind.Record;
         return rec;
     }
 
-    rulePrimaryExpressionTrail(ret: Ast): Ast {
+    rulePrimaryExpressionTail(ret: Ast): Ast {
+        this.next();
         while (true) {
             switch (this.tt) {
                 case Token.LParen:
-                    var r = this.ruleRecord(Token.LParen, Token.RParen);
+                    var r = this.ruleRecordDelimited(Token.LParen, Token.RParen);
+                    this.next();
                     ret = addParameters(ret, r.f);
+                    break;
+
+                case Token.Ident:
+                    var name = this.next();
+                    ret = astApp(astName(name), [{ name: null, value: ret }]);
                     break;
 
                 case Token.LBracket:
                 case Token.LBrace:
-                case Token.Ident:
-                case Token.TypeIdent:
-                    var e = this.rulePrimaryExpression(false);
+                    var e = this.rulePrimaryExpressionDelimited();
+                    this.next();
                     ret = addParameters(ret, [{ name: null, value: e }]);
                     break;
 
@@ -835,7 +967,8 @@ export class AstParser {
             if (pred < minPred) break;
 
             var op = this.next();
-            var rhs = this.rulePrimaryExpression(true);
+            var rhs = this.rulePrimaryExpressionDelimited();
+            rhs = this.rulePrimaryExpressionTail(rhs);
 
             while (this.tt === Token.OpIdent) {
                 var pred2 = this.tokenPrec;
@@ -854,11 +987,13 @@ export class AstParser {
     }
 
     ruleExpression(): Ast {
-        var p = this.rulePrimaryExpression(true);
+        var p = this.rulePrimaryExpressionDelimited();
+        p = this.rulePrimaryExpressionTail(p);
         var e = this.ruleExpressionRest(p, 0);
 
         if (this.test(Token.Equal)) {
-            var pv = this.rulePrimaryExpression(true);
+            var pv = this.rulePrimaryExpressionDelimited();
+            pv = this.rulePrimaryExpressionTail(pv);
             var ev = this.ruleExpressionRest(pv, 0);
 
             e = { kind: AstKind.Match, pattern: e, value: ev };
@@ -885,10 +1020,10 @@ export class AstParser {
         }
     }
 
-    ruleLambda(): Ast {
+    ruleLambdaDelimited(): Ast {
         this.expect(Token.LBrace);
         var r = <AstLambda>this.ruleLambdaBody();
-        this.expect(Token.RBrace);
+        this.expectPeek(Token.RBrace);
         r.kind = AstKind.Lambda;
         return r;
     }

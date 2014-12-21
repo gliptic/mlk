@@ -3,6 +3,32 @@
 import parser = require("parser");
 import compiler = require("compiler");
 
+function doIndent(arr: string[], indent: number) {
+    for (var i = 0; i < indent; ++i) {
+        arr.push('  ');
+    }
+}
+
+function treeToString(x: parser.Ast, arr: string[], indent: number) {
+    doIndent(arr, indent);
+    //arr.push('(');
+    if (!x) {
+        arr.push('null\r\n');
+    } else {
+        arr.push(parser.AstKind[x.kind]);
+        switch (x.kind) {
+            case parser.AstKind.Name:
+                arr.push(' ');
+                arr.push((<parser.AstName>x).name);
+                break;
+        }
+        arr.push('\r\n');
+        ++indent;
+    
+        parser.traverseValues(x, c => treeToString(c, arr, indent));
+    }
+}
+
 export function runCode(code: string, output: (x: string) => void): any {
     console.log('Loaded app');
 
@@ -11,8 +37,12 @@ export function runCode(code: string, output: (x: string) => void): any {
         var m = p.ruleModule();
 
         var c = new compiler.Compiler();
-        output(JSON.stringify(m));
-        c.resolve(m, null);
+        var arr: string[] = [];
+        treeToString(m, arr, 0);
+        output(arr.join(''));
+        //output(JSON.stringify(m));
+        //output(JSON.stringify(m, undefined, 2));
+        //c.resolve(m, null);
     } catch (e) {
         output("Compile error: " + e);
     }
@@ -39,6 +69,10 @@ function initCodeMirror(element, isInitialized, context) {
         value:
         "Foo = :{ a => b }\n" +
         "Bar = :[ a: Int ]"
+    });
+    codeMirror.setOption("indentUnit", 4);
+    codeMirror.setOption("extraKeys", {
+        Tab: cm => cm.replaceSelection(Array(cm.getOption("indentUnit") + 1).join(" "))
     });
 }
 
@@ -74,6 +108,16 @@ module List {
     }
 }
 
+function dropDown(items, text) {
+    return m('li.dropdown', [
+            m('a.dropdown-toggle', [
+                text,
+                m('b.caret')
+            ]),
+            m('ul.dropdown-menu', { style: { display: 'none' } }, items.map(x => m('li', m('a', x))))
+        ]);
+}
+
 var app = {
     controller: function () {
         return {
@@ -87,16 +131,23 @@ var app = {
     },
     view: function (ctrl) {
         return [
-            m('.header-panel.shadow-z2', [
-                List.view(ctrl.exampleList)
+            m('.navbar', [
+                m('.navbar-header', [
+                    m('a.navbar-brand', 'Test')
+                ]),
+                m('.navbar-collapse', [
+                    m('ul.nav.navbar-nav', [
+                        dropDown(['A', 'B'], 'Examples')
+                    ])
+                ])
             ]),
             m('.section.group', { style: { padding: '0rem 5rem' } }, [
-                m('div', { class: 'col span_1_of_2' }, [
-                    m('div', { 'class': 'half-pane', config: initCodeMirror })
+                m('div.col.span_1_of_2', [
+                    m('div.half-pane', { config: initCodeMirror })
                 ]),
-                m('div', { class: 'col span_1_of_2' }, [
-                    m('div', { 'class': 'half-pane', style: 'position: relative; padding: 0.5rem' }, [
-                        ctrl.result(),
+                m('div.col.span_1_of_2', [
+                    m('div.half-pane', { style: 'position: relative; padding: 0.5rem' }, [
+                        m('pre', ctrl.result()),
                         m('input', {
                             type: 'button',
                             onclick: () => ctrl.compile(ctrl),

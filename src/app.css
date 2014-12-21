@@ -14,7 +14,8 @@ time, mark, audio, video {
 	margin: 0;
 	padding: 0;
 	border: 0;
-	font-size: 100%;
+	/* font-size: 100%;*/
+    font-size: 16px;
 	font: inherit;
 	vertical-align: baseline;
 }
@@ -25,6 +26,7 @@ footer, header, hgroup, menu, nav, section {
 }
 body {
 	line-height: 1;
+    
 }
 ol, ul {
 	list-style: none;
@@ -140,8 +142,113 @@ body {
     padding: 10px 20px;
 }
 
-.dropdownjs * {
+* {
     box-sizing: border-box;
+}
+
+
+/* nav */
+
+.navbar {
+    background-color: #009587;
+    border: 0;
+    border-radius: 0;
+    position: relative;
+    min-height: 60px;
+    margin-bottom: 20px;
+}
+
+.navbar-brand {
+    position: relative;
+    height: 60px;
+    line-height: 30px;
+    color: rgba(255, 255, 255, .84);
+    float: left;
+    padding: 15px 15px;
+    font-size: 18px;
+}
+
+.navbar-collapse {
+    border-color: rgba(0, 0, 0, .1);
+    display: block;
+    width: auto;
+    height: 60px;
+    border-top: 0;
+    box-shadow: none;
+    padding-left: 15px;
+    padding-right: 15px;
+    font-size: 16px;
+    line-height: 30px;
+}
+
+.navbar-header {
+    float: left;
+}
+
+.navbar-nav {
+    float: left;
+    margin: 0;
+}
+
+.navbar-nav > li {
+    float:left;
+}
+
+.nav > li {
+    position: relative;
+    display: block;
+}
+
+.nav {
+    padding-left: 0;
+    list-style: none;
+}
+
+.navbar-nav > li > a {
+    color: rgba(255,255,255,.84);
+    padding: 15px;
+    display: block;
+}
+
+.navbar-nav > li > a {
+    background-color: rgba(0,0,0,.05);
+}
+
+.navbar-nav > li > .dropdown-menu {
+    margin-top: 0;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+
+.dropdown-menu {
+    display: block;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1000;
+    float: left;
+    min-width: 160px;
+    padding: 5px 0;
+    margin: 2px 0 0;
+    font-size: 14px;
+    text-align: left;
+    list-style: none;
+    background-color: #fff;
+    background-clip: padding-box;
+    border-radius: 4px;
+    border: 0;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, .26);
+
+}
+
+.dropdown-menu > li > a {
+    display: block;
+    padding: 3px 20px;
+    clear: both;
+    font-weight: 400;
+    line-height: 1.42857143;
+    color: #333;
+    white-space: nowrap;
 }
 
 /*  SECTIONS  */
