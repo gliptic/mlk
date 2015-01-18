@@ -212,6 +212,7 @@ body {
 
 .navbar-nav > li > a {
     background-color: rgba(0,0,0,.05);
+    cursor: pointer;
 }
 
 .navbar-nav > li > .dropdown-menu {
@@ -221,6 +222,7 @@ body {
 }
 
 .dropdown-menu {
+    cursor: pointer;
     display: block;
     position: absolute;
     top: 100%;

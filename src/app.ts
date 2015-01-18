@@ -2,6 +2,7 @@
 
 import parser = require("parser");
 import compiler = require("compiler");
+import td = require("transducers");
 
 function doIndent(arr: string[], indent: number) {
     for (var i = 0; i < indent; ++i) {
@@ -42,7 +43,7 @@ export function runCode(code: string, output: (x: string) => void): any {
         output(arr.join(''));
         //output(JSON.stringify(m));
         //output(JSON.stringify(m, undefined, 2));
-        //c.resolve(m, null);
+        c.scan(m, null);
     } catch (e) {
         output("Compile error: " + e);
     }
@@ -108,13 +109,33 @@ module List {
     }
 }
 
-function dropDown(items, text) {
-    return m('li.dropdown', [
+var visibleDropDown;
+
+function dropDown(key, items: any[], text, select) {
+    function click(e) {
+        if (e.target.classList.contains('dropdown-toggle')) {
+            if (visibleDropDown === key) {
+                visibleDropDown = null;
+            } else {
+                visibleDropDown = key;
+            }
+        } else {
+            visibleDropDown = null;
+            var name = e.target.getAttribute('value');
+            console.log(e.target);
+            console.log(name);
+            items.forEach(x => {
+                if (x.name === name) { select(x); }
+            });
+        }
+    }
+    return m('li.dropdown', { key: key, onclick: click }, [
             m('a.dropdown-toggle', [
                 text,
                 m('b.caret')
             ]),
-            m('ul.dropdown-menu', { style: { display: 'none' } }, items.map(x => m('li', m('a', x))))
+            m('ul.dropdown-menu', { style: { display: visibleDropDown === key ? 'block' : 'none' } },
+                items.map(x => m('li', m('a', { value: x.name }, x.text))))
         ]);
 }
 
@@ -122,7 +143,10 @@ var app = {
     controller: function () {
         return {
             result: m.prop(''),
-            exampleList: new List.controller(["A", "B"]),
+            examples: [
+                { name: 'A', text: 'A', contents: 'a.b = 0' },
+                { name: 'B', text: 'B', contents: 'a.b = 0' }
+            ],
             compile: (ctrl) => {
                 var code = codeMirror.getValue();
                 var tree = runCode(code, (s) => ctrl.result(s));
@@ -133,11 +157,13 @@ var app = {
         return [
             m('.navbar', [
                 m('.navbar-header', [
-                    m('a.navbar-brand', 'Test')
+                    m('a.navbar-brand', 'Mlk')
                 ]),
                 m('.navbar-collapse', [
                     m('ul.nav.navbar-nav', [
-                        dropDown(['A', 'B'], 'Examples')
+                        dropDown('examples', ctrl.examples, 'Examples', function (opt) {
+                            codeMirror.setValue(opt.contents);
+                        })
                     ])
                 ])
             ]),

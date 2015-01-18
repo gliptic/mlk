@@ -1,21 +1,17 @@
 ﻿import P = require("parser");
 import td = require("transducers");
 
-interface Scope {
-    symbols: any;
-    parent: Scope;
-}
-
 export class Compiler {
     mods: P.Module[];
-    scope: Scope;
+    scanContext: P.AstLambda;
 
     constructor() {
         this.mods = [];
-        this.scope = { parent: null, symbols: {} };
     }
 
     resolveType(t: P.AstType): P.AstType {
+        if (!t) return t;
+
         switch (t.kind) {
             case P.AstTypeKind.App: {
                 var app = <P.AstTypeApp>t;
@@ -53,18 +49,30 @@ export class Compiler {
         }
     }
 
+    resolvePattern(p: P.Ast) {
+        switch (p.kind) {
+            case P.AstKind.Name: {
+                p.type = this.resolveType(p.type);
+                break;
+            }
+
+            default:
+                throw "Unimplemented: complex patterns";
+        }
+    }
+
     addSymbol(name: string, sym: any) {
-        if (this.scope.symbols[name]) {
+        if (this.scanContext.symbols[name]) {
             throw "Identifier already used " + name;
         }
         console.log("Adding", name);
-        this.scope.symbols[name] = sym;
+        this.scanContext.symbols[name] = sym;
     }
 
 
 
     findSymbol(name: string): any {
-        function find(name: string, sc: Scope) {
+        function find(name: string, sc: P.AstLambda) {
             //if (!sc) return null;
             if (!sc) throw "Did not find symbol " + name;
             var val = sc.symbols[name];
@@ -72,11 +80,12 @@ export class Compiler {
             return find(name, sc.parent);
         }
         
-        return find(name, this.scope);
+        return find(name, this.scanContext);
     }
 
     resolveMatch(name: P.Ast, value: P.Ast) {
         if (name) {
+            this.resolvePattern(name);
             if (name.kind === P.AstKind.Name) {
                 var n = <P.AstName>name;
                 this.addSymbol(n.name, { kind: P.AstKind.ValRef, name: n.name });
@@ -86,11 +95,13 @@ export class Compiler {
             }
         }
         
-        this.resolve(value, null);
+        this.scan(value, null);
         // value.type
     }
 
-    resolve(m: P.Ast, contextType: P.AstType) {
+    scan(m: P.Ast, contextType: P.AstType) {
+        if (!m) return;
+
         switch (m.kind) {
             case P.AstKind.TypeVal: {
                 var typeVal = <P.AstTypeVal>m;
@@ -101,33 +112,76 @@ export class Compiler {
 
             case P.AstKind.App: {
                 var app = <P.AstApp>m;
-                this.resolve(app.f, null);
-                app.params.forEach(a => this.resolve(a.value, null));
+                this.scan(app.f, null);
+                app.params.forEach(a => this.scan(a.value, null));
                 break;
             }
 
             case P.AstKind.Record: {
                 var record = <P.AstRecord>m;
-                record.f.forEach(a => this.resolve(a.value, null));
+                record.f.forEach(a => this.scan(a.value, null));
                 break;
             }
 
             case P.AstKind.Lambda: {
                 var lambda = <P.AstLambda>m;
-                this.scope = { parent: this.scope, symbols: {} };
+                var pendingAdding: P.FieldPair[] = [];
 
-                lambda.p.forEach(p => {
-                    if (p.name.kind === P.AstKind.Name) {
+                var flushPending = () => {
+                    // TODO
+                    pendingAdding.forEach(p => {
                         var n = <P.AstName>p.name;
-                        this.addSymbol(n.name, { kind: P.AstKind.ValRef, name: n.name });
-                        // TODO: Handle other patterns
-                    }
-                });
+                        console.log("Resolving pending node", n.name);
+                        this.scan(p.value, p.name.type);
+                    });
 
-                lambda.f.forEach(f => {
-                    this.resolveMatch(f.name, f.value);
-                });
-                
+                    pendingAdding.length = 0;
+                }
+
+                if (lambda.scanState === P.ScanState.NotScanned) {
+                    lambda.scanState = P.ScanState.Scanning;
+
+                    var oldScanContext = this.scanContext;
+                    this.scanContext = lambda;
+
+                    var ptypes = [];
+
+                    // TODO: Use context type to fill in parameter types
+                    lambda.p.forEach(p => {
+                        if (p.name.kind === P.AstKind.Name) {
+                            this.scan(p.value, p.type);
+
+                            var n = <P.AstName>p.name;
+                            this.addSymbol(n.name, { kind: P.AstKind.ParRef, name: n.name });
+                        }
+                        // TODO: Handle other patterns
+
+                        ptypes.push(p.type)
+                    });
+
+                    lambda.f.forEach(f => {
+                        if (f.value.kind === P.AstKind.Lambda) {
+                            // TODO: Handle other patterns
+                            var n = <P.AstName>f.name;
+                            this.addSymbol(n.name, { kind: P.AstKind.ValRef, name: n.name });
+                            pendingAdding.push(f);
+                        } else {
+                            flushPending();
+
+                            this.scan(f.value, null); // TODO: Get a type from declaration
+                        }
+                    });
+
+                    flushPending();
+
+                    var ftype = lambda.f[lambda.f.length - 1].type; // TODO: Handle conditional returns
+
+                    lambda.type = { kind: P.AstTypeKind.Lambda, p: ptypes, f: [ftype] };
+
+                    lambda.scanState = P.ScanState.Scanned;
+                    this.scanContext = oldScanContext;
+                }
+
                 break;
             }
 
@@ -139,25 +193,6 @@ export class Compiler {
                 // TODO: Handle type constructors
                 console.log("Found", name.name);
                 return sym;
-            }
-        }
-
-        /*
-        P.traverseValues(m, a => {
-            this.resolve(a);
-        });
-
-        P.traversePatterns(m, a => {
-            // Nothing
-            console.log("Pattern:", a);
-        });
-        */
-
-        switch (m.kind) {
-            case P.AstKind.Lambda: {
-
-                this.scope = this.scope.parent;
-                break;
             }
         }
     }

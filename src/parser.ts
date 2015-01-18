@@ -63,6 +63,7 @@ export enum AstKind {
     Lambda,
     Record,
     ValRef,
+    ParRef,
     TypeVal,
     
 }
@@ -90,9 +91,18 @@ export interface AstMatch extends Ast {
     value: Ast;
 }
 
+export enum ScanState {
+    NotScanned = 0,
+    Scanning,
+    Scanned
+}
+
 export interface AstLambda extends Ast {
     p: FieldPair[];
     f: FieldPair[];
+    scanState: ScanState;
+    parent: AstLambda;
+    symbols: any;
 }
 
 export interface AstRecord extends Ast {
@@ -110,7 +120,7 @@ export interface AstValRef extends Ast {
 export interface FieldPair {
     name: Ast;
     value: Ast;
-    type?: AstType;
+    type?: AstType; // Only used for parameters
 }
 
 function astName(name: string): AstName {
@@ -145,6 +155,7 @@ export interface TypeFieldPair extends TypeFieldTypePair {
 
 export enum AstTypeKind {
     Any,
+    Prim,
     Unit,
     Name,
     App,
@@ -398,6 +409,7 @@ export class AstParser {
     tokenData: any;
     tokenPrec: number;
     tt: Token;
+    currentLambda: AstLambda;
         
     constructor(source: string) {
         this.source = source;
@@ -406,6 +418,7 @@ export class AstParser {
         this.precedence = [];
         this.currentLine = 0;
         this.precedence['='.charCodeAt(0)] = 1;
+        this.precedence['&'.charCodeAt(0)] = 1;
         this.precedence['<'.charCodeAt(0)] = 2;
         this.precedence['>'.charCodeAt(0)] = 2;
         this.precedence['+'.charCodeAt(0)] = 3;
@@ -523,8 +536,8 @@ export class AstParser {
         this.tokenBeg = this.sourcePos - 1;
 
         if (this.firstOnLine && this.c !== 0) {
+            this.firstOnLine = false;
             if (this.beginCol() <= this.prevIndent) {
-                this.firstOnLine = false;
                 this.tt = Token.Comma;
                 return data;
             }
@@ -538,7 +551,8 @@ export class AstParser {
                 ident += String.fromCharCode(this.c);
                 this.nextch();
             } while ((this.c >= chara && this.c <= charz)
-                  || (this.c >= charA && this.c <= charZ));
+                  || (this.c >= charA && this.c <= charZ)
+                  || (this.c >= char0 && this.c <= char9));
 
             this.tokenData = ident;
             this.tt = Token.Ident;
@@ -715,7 +729,15 @@ export class AstParser {
     }
 
     typeExpressionOrBinding(): TypeFieldPair {
-        var parseTypeValue = (name: string) => {
+        var a = this.typeExpression();
+
+        if (this.tt === Token.Colon || this.tt === Token.Equal) {
+            if (a.kind !== AstTypeKind.Name) {
+                throw "Type binding must be a name";
+            }
+
+            var name = (<AstTypeName>a).name;
+
             var t = typeAny, e: Ast = null;
 
             if (this.test(Token.Colon)) {
@@ -727,29 +749,9 @@ export class AstParser {
             }
 
             return { name: name, type: t, value: e };
-        };
-
-        /*
-        if (this.tt === Token.Ident) {
-            var name = <string>this.next();
-            var t = typeAny, e: Ast = null;
-
-            return parseTypeValue(name);
-            
-        } else {*/
-            var a = this.typeExpression();
-
-            if (this.tt === Token.Colon || this.tt === Token.Equal) {
-                if (a.kind !== AstTypeKind.Name) {
-                    throw "Type binding must be a name";
-                }
-
-                return parseTypeValue((<AstTypeName>a).name);
-
-            } else {
-                return { name: null, type: a, value: null };
-            }
-        /*}*/
+        } else {
+            return { name: null, type: a, value: null };
+        }
     }
 
     typePair(t: AstType): TypeFieldTypePair {
@@ -859,6 +861,8 @@ export class AstParser {
         } else if (this.test(Token.Gt)) { // We use normal lexer here because it can handle <, </ and primary expressions
             var children: FieldPair[] = [];
             while (true) {
+                while (this.test(Token.Comma)) /* Nothing */;
+
                 var child;
                 if (this.tt === Token.OpIdent && this.tokenData === '<') {
                     child = this.rulePrimaryMarkupDelimited();
@@ -912,8 +916,9 @@ export class AstParser {
                 if (this.tokenData === '<') {
                     return this.rulePrimaryMarkupDelimited();
                 } else {
-                    // TODO
-                    throw "Unimplemented: unary op";
+                    var op = this.next();
+                    var rest = this.rulePrimaryExpressionDelimited();
+                    return astApp(astName(op), [{ name: null, value: rest }]);
                 }
             default:
                 throw "Unexpected token " + Token[this.tt] + " in primary expression";
@@ -923,7 +928,7 @@ export class AstParser {
     // Needs this.next() after
     ruleRecordDelimited(l: Token, r: Token): AstRecord {
         this.expect(l);
-        var b = this.ruleLambdaBody();
+        var b = this.ruleLambdaBody(false);
         if (b.p.length)
             throw "Parameters not allowed in a record"; // TODO: Pass whether parameters are allowed to ruleLambdaBody
         this.expectPeek(r);
@@ -1008,7 +1013,7 @@ export class AstParser {
     ruleExpressionOrBinding(): FieldPair {
         var e = <AstMatch>this.ruleExpression();
         if (e.kind === AstKind.Match) {
-            return { name: e.pattern, value: e.value, type: e.type };
+            return { name: e.pattern, value: e.value };
         /*
         } else if (e.type && e.kind === AstKind.Name) { // TODO: Handle other patterns than names
             var type = e.type;
@@ -1016,21 +1021,30 @@ export class AstParser {
             return { name: e, value: e.value, type: e.type };
             */
         } else {
-            return { name: null, value: e, type: e.type };
+            return { name: null, value: e };
         }
     }
 
     ruleLambdaDelimited(): Ast {
         this.expect(Token.LBrace);
-        var r = <AstLambda>this.ruleLambdaBody();
+        var r = <AstLambda>this.ruleLambdaBody(true);
         this.expectPeek(Token.RBrace);
         r.kind = AstKind.Lambda;
+        r.parent = this.currentLambda;
+        r.scanState = ScanState.NotScanned;
+        r.symbols = {};
         return r;
     }
 
-    ruleLambdaBody(): { p: FieldPair[]; f: FieldPair[] } {
+    ruleLambdaBody(newScope: boolean): { p?: FieldPair[]; f?: FieldPair[]; parent?: AstLambda } {
         var params: FieldPair[] = [], fields: FieldPair[] = [];
         var seenParams = false;
+
+        var scope: { p?: FieldPair[]; f?: FieldPair[]; parent?: AstLambda } = {};
+        if (newScope) {
+            scope.parent = this.currentLambda;
+            this.currentLambda = <AstLambda>scope;
+        }
 
         this.beginIndent();
 
@@ -1044,7 +1058,6 @@ export class AstParser {
             }
 
             var e = this.ruleExpressionOrBinding();
-            console.log('After ruleExpressionOrBinding:', Token[this.tt]);
 
             fields.push(e);
 
@@ -1055,10 +1068,10 @@ export class AstParser {
                 seenParams = true;
                 params = td.map(fields, x => {
                     if (x.name && x.name.kind === AstKind.Name) {
-                        return { name: x.name, value: x.value, type: x.type };
+                        return { name: x.name, value: x.value, type: x.name.type };
                     }
                     if (x.value && x.value.kind === AstKind.Name) {
-                        return { name: x.value, value: null, type: x.type };
+                        return { name: x.value, value: null, type: x.value.type };
                     }
                     throw "Expected name";
                 });
@@ -1070,16 +1083,35 @@ export class AstParser {
 
         this.endIndent();
 
-        return { p: params, f: fields };
+        if (newScope) {
+            this.currentLambda = this.currentLambda.parent;
+        }
+
+        scope.p = params;
+        scope.f = fields;
+        return scope;
     }
 
     ruleModule(): Module {
-        var r = this.ruleLambdaBody();
+        var r = this.ruleLambdaBody(true);
         console.log(r);
         this.expect(Token.Eof);
         var m = <Module>r;
         m.kind = AstKind.Lambda;
+        m.scanState = ScanState.NotScanned;
         m.name = "";
+        m.symbols = {};
+        m.parent = {
+            kind: AstKind.Lambda,
+            p: [],
+            f: [],
+            scanState: ScanState.Scanned,
+            parent: null,
+
+            symbols: {
+                int: { kind: AstTypeKind.Prim, bits: 32, signed: true }
+            }
+        };
         return m;
     }
 }
