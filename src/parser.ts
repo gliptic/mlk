@@ -29,6 +29,7 @@ isWhitespace[LF] = true;
 export enum Token {
     Comma = 0,
     Colon,
+    Semicolon,
     Dot,
     Bar,
     Underscore,
@@ -402,8 +403,11 @@ export class AstParser {
     //col: number;
     beginLine: number;
     //firstOnLinePos: number;
+    curIndent: number;
     firstOnLine: boolean;
     prevIndent: number;
+    prevArrowIndent: number;
+    //arrowIndent: boolean;
     indents: number[];
     currentLine: number;
     tokenData: any;
@@ -426,6 +430,8 @@ export class AstParser {
         this.precedence['*'.charCodeAt(0)] = 4;
         this.precedence['/'.charCodeAt(0)] = 4;
         this.beginLine = 0;
+        this.curIndent = 0;
+        this.prevArrowIndent = 0;
         this.firstOnLine = true;
 
         this.nextch();
@@ -513,23 +519,23 @@ export class AstParser {
 
         if (newline) {
             this.firstOnLine = true;
+            this.curIndent = this.sourcePos - 1 - this.beginLine;
         }
     }
 
+    /*
     beginIndent() {
-        this.indents.push(this.prevIndent);
-        this.prevIndent = this.sourcePos - 1 - this.beginLine;
+        var oldPrevIndent = this.prevIndent;
+        var oldPrevArrowIndent = this.prevArrowIndent;
+        this.prevIndent = this.curIndent;
+        this.prevArrowIndent = this.curIndent;
     }
 
     endIndent() {
-        this.prevIndent = this.indents.pop();
+        this.prevIndent = oldPrevIndent;
+        this.prevArrowIndent = oldPrevArrowIndent;
     }
-
-    unnext() {
-        this.sourcePos = this.tokenBeg;
-        this.c = this.sourcePos >= this.sourceLen ? 0 : this.source.charCodeAt(this.sourcePos);
-        ++this.sourcePos;
-    }
+    */
 
     next() {
         var data = this.tokenData;
@@ -537,9 +543,13 @@ export class AstParser {
 
         if (this.firstOnLine && this.c !== 0) {
             this.firstOnLine = false;
-            if (this.beginCol() <= this.prevIndent) {
+            var beginCol = this.beginCol();
+            if (beginCol <= this.prevArrowIndent) {
+                this.tt = Token.Semicolon;
+                return null;
+            } else if (beginCol <= this.prevIndent) {
                 this.tt = Token.Comma;
-                return data;
+                return null;
             }
         }
 
@@ -579,6 +589,7 @@ export class AstParser {
                 case '[': this.tt = Token.LBracket; break;
                 case ']': this.tt = Token.RBracket; break;
                 case ':': this.tt = Token.Colon; break;
+                case ';': this.tt = Token.Semicolon; break;
                 case ',': this.tt = Token.Comma; break;
                 case '.': this.tt = Token.Dot; break;
                 case '|': this.tt = Token.Bar; break;
@@ -763,11 +774,28 @@ export class AstParser {
         var params: TypeFieldPair[] = [], fields: TypeFieldPair[] = [];
         var seenParams = false;
 
-        this.beginIndent();
+        var oldPrevIndent = this.prevIndent;
+        var oldPrevArrowIndent = this.prevArrowIndent;
+        this.prevIndent = this.curIndent;
+        this.prevArrowIndent = this.curIndent;
 
         while (true) {
-            while (this.test(Token.Comma)) {
-                // Nothing
+            while (true) {
+                if (this.tt === Token.Semicolon) {
+                    if (seenParams) {
+                        this.prevArrowIndent = this.prevIndent;
+                        this.prevIndent = this.prevArrowIndent;
+                        seenParams = false;
+
+                        // TEMP until we actually support more than one case
+                        fields.length = 0;
+                        params.length = 0;
+                    }
+                } else if (this.tt !== Token.Comma) {
+                    break;
+                }
+
+                this.next();
             }
 
             if (this.tt === Token.RBrace || this.tt === Token.RParen || this.tt === Token.RBracket || this.tt === Token.Eof) {
@@ -778,19 +806,25 @@ export class AstParser {
 
             fields.push(e);
 
-            if (this.test(Token.Arrow)) {
+            if (this.tt === Token.Arrow) {
+                this.prevArrowIndent = this.prevIndent;
+                this.prevIndent = this.curIndent;
+
+                this.next();
+
                 if (seenParams) {
-                    throw "Duplicate parameter block";
+                    throw "Parameter block must be preceded by ';'";
                 }
                 seenParams = true;
                 params = fields;
                 fields = [];
-            } else if (this.tt !== Token.Comma) {
+            } else if (this.tt !== Token.Comma && this.tt !== Token.Semicolon) {
                 break;
             }
         }
 
-        this.endIndent();
+        this.prevIndent = oldPrevIndent;
+        this.prevArrowIndent = oldPrevArrowIndent;
 
         return { p: params, f: fields };
     }
@@ -1046,11 +1080,28 @@ export class AstParser {
             this.currentLambda = <AstLambda>scope;
         }
 
-        this.beginIndent();
+        var oldPrevIndent = this.prevIndent;
+        var oldPrevArrowIndent = this.prevArrowIndent;
+        this.prevIndent = this.curIndent;
+        this.prevArrowIndent = oldPrevIndent;
 
         while (true) {
-            while (this.test(Token.Comma)) {
-                // Nothing
+            while (true) {
+                if (this.tt === Token.Semicolon) {
+                    if (seenParams) {
+                        this.prevArrowIndent = this.prevIndent;
+                        this.prevIndent = this.prevArrowIndent;
+                        seenParams = false;
+
+                        // TEMP until we actually support more than one case
+                        //fields.length = 0;
+                        //params.length = 0;
+                    }
+                } else if (this.tt !== Token.Comma) {
+                    break;
+                }
+
+                this.next();
             }
 
             if (this.tt === Token.RBrace || this.tt === Token.RParen || this.tt === Token.RBracket || this.tt === Token.Eof) {
@@ -1061,9 +1112,14 @@ export class AstParser {
 
             fields.push(e);
 
-            if (this.test(Token.Arrow)) {
+            if (this.tt === Token.Arrow) {
+                this.prevArrowIndent = this.prevIndent;
+                this.prevIndent = this.curIndent;
+
+                this.next();
+
                 if (seenParams) {
-                    throw "Duplicate parameter block";
+                    throw "Parameter block must be preceded by ';'";
                 }
                 seenParams = true;
                 params = td.map(fields, x => {
@@ -1076,12 +1132,13 @@ export class AstParser {
                     throw "Expected name";
                 });
                 fields.length = 0;
-            } else if (this.tt !== Token.Comma) {
+            } else if (this.tt !== Token.Comma && this.tt !== Token.Semicolon) {
                 break;
             }
         }
 
-        this.endIndent();
+        this.prevIndent = oldPrevIndent;
+        this.prevArrowIndent = oldPrevArrowIndent;
 
         if (newScope) {
             this.currentLambda = this.currentLambda.parent;
