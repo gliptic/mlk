@@ -40,7 +40,7 @@ export class Compiler {
 
             case P.AstKind.TypeName: {
                 var name = <P.AstTypeName>t;
-                var sym = this.findSymbol(name.name);
+                var sym = this.findTypeSymbol(name.name);
                 if (sym) {
                     // TODO: Check that sym is a type
                     console.log("Found type symbol", name.name);
@@ -67,29 +67,27 @@ export class Compiler {
         }
     }
 
-    addSymbol(name: string, sym: any) {
-        if (this.scanContext.symbols[name]) {
+    addValueSymbol(name: string, sym: any) {
+        if (this.scanContext.valueSymbols[name]) {
             throw "Identifier already used " + name;
         }
-        console.log("Adding", name);
-        this.scanContext.symbols[name] = sym;
+        console.log("Adding value", name);
+        this.scanContext.valueSymbols[name] = sym;
     }
 
-    findSymbol(name: string): any {
+    addTypeSymbol(name: string, sym: any) {
+        if (this.scanContext.typeSymbols[name]) {
+            throw "Identifier already used " + name;
+        }
+        console.log("Adding type", name);
+        this.scanContext.typeSymbols[name] = sym;
+    }
+
+    findValueSymbol(name: string): any {
         function find(name: string, sc: P.Case) {
-            var val = sc.symbols[name];
+            var val = sc.valueSymbols[name];
             if (val) return val;
             if (!sc.parent) {
-                /*
-                if (name[0] == '.') {
-                    // Synthesize dotted accessors
-                    // TODO: This is just a hack for now.
-                    val = { kind: P.AstKind.App };
-                    sc.symbols[name] = val;
-                    return val;
-                }
-                throw "Did not find symbol " + name;
-                */
                 return null;
             }
             return find(name, sc.parent);
@@ -98,12 +96,25 @@ export class Compiler {
         return find(name, this.scanContext);
     }
 
+    findTypeSymbol(name: string): any {
+        function find(name: string, sc: P.Case) {
+            var val = sc.typeSymbols[name];
+            if (val) return val;
+            if (!sc.parent) {
+                return null;
+            }
+            return find(name, sc.parent);
+        }
+
+        return find(name, this.scanContext);
+    }
+
     resolveMatch(name: P.Ast, value: P.Ast) {
         if (name) {
             this.resolvePattern(name);
             if (name.kind === P.AstKind.Name) {
                 var n = <P.AstName>name;
-                this.addSymbol(n.name, { kind: P.AstKind.ValRef, name: n.name });
+                this.addValueSymbol(n.name, { kind: P.AstKind.ValRef, name: n.name });
                 // TODO: Handle other patterns
             } else {
                 throw "Unimplemented: patterns";
@@ -196,7 +207,7 @@ export class Compiler {
                                 this.scan(p.value, p.type);
 
                                 var n = <P.AstName>p.name;
-                                this.addSymbol(n.name, { kind: P.AstKind.ParRef, name: n.name });
+                                this.addValueSymbol(n.name, { kind: P.AstKind.ParRef, name: n.name });
                             }
                             // TODO: Handle other patterns
 
@@ -207,16 +218,20 @@ export class Compiler {
                             if (f.value.kind === P.AstKind.Lambda) {
                                 // TODO: Handle other patterns
                                 var n = <P.AstName>f.name;
-                                this.addSymbol(n.name, { kind: P.AstKind.ValRef, name: n.name });
+                                this.addValueSymbol(n.name, { kind: P.AstKind.ValRef, name: n.name });
                                 pendingAdding.push(f);
                             } else {
                                 var n = <P.AstName>f.name;
                                 flushPending();
 
-                                this.scan(f.value, null); // TODO: Get a type from declaration
+                                var val = this.scan(f.value, null); // TODO: Get a type from declaration
                                 if (n) {
-                                    // TODO: Assign to variable
-                                    this.addSymbol(n.name, { kind: P.AstKind.ValRef, name: n.name });
+                                    if (f.value.kind === P.AstKind.ValOfType) {
+                                        this.addTypeSymbol(n.name, val);
+                                    } else {
+                                        // TODO: Assign to variable
+                                        this.addValueSymbol(n.name, { kind: P.AstKind.ValRef, name: n.name });
+                                    }
                                 }
                             }
                         });
@@ -242,7 +257,7 @@ export class Compiler {
 
             case P.AstKind.Name: {
                 var name = <P.AstName>m;
-                var sym = this.findSymbol(name.name);
+                var sym = this.findValueSymbol(name.name);
                 if (sym) {
                     var ref = <P.AstValRef>m;
                     ref.kind = P.AstKind.ValRef;

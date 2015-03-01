@@ -115,7 +115,8 @@ export enum ScanState {
 }
 
 export interface Scope {
-    symbols: any;
+    valueSymbols: any;
+    typeSymbols: any;
     parent: Scope;
 }
 
@@ -1176,7 +1177,7 @@ export class AstParser {
 
         var parentScope = this.currentScope;
 
-        var c: Case = { symbols: {}, parent: parentScope };
+        var c: Case = { valueSymbols: {}, typeSymbols: {}, parent: parentScope };
         var lambda = { kind: AstKind.Lambda, cases: cases, scanState: ScanState.NotScanned };
 
         this.currentScope = c;
@@ -1189,7 +1190,7 @@ export class AstParser {
                 fields = [];
                 params = [];
 
-                c = { symbols: {}, parent: parentScope };
+                c = { valueSymbols: {}, typeSymbols: {}, parent: parentScope };
                 this.currentScope = c;
             }
         }
@@ -1273,11 +1274,13 @@ export class AstParser {
 
             // TODO: Two different symbol namespaces for types vs. values
 
-            symbols: {
+            typeSymbols: {
                 i32: { kind: AstKind.TypePrim, float: false, bits: 32, signed: true },
                 f64: { kind: AstKind.TypePrim, float: true, bits: 64, signed: true },
-                '&': { kind: AstKind.TypeLambda }, // TODO: & needs to be overloaded
-
+                '&': { kind: AstKind.TypeLambda },
+            },
+            valueSymbols: {
+                '&': { kind: AstKind.Lambda },
                 'if': { kind: AstKind.Lambda },
                 'else': { kind: AstKind.Lambda },
                 '<': { kind: AstKind.Lambda },
