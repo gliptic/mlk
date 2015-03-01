@@ -3,7 +3,7 @@ import td = require("transducers");
 
 export class Compiler {
     mods: P.Module[];
-    scanContext: P.AstLambda;
+    scanContext: P.Case;
 
     constructor() {
         this.mods = [];
@@ -13,35 +13,41 @@ export class Compiler {
         if (!t) return t;
 
         switch (t.kind) {
-            case P.AstTypeKind.App: {
+            case P.AstKind.TypeApp: {
                 var app = <P.AstTypeApp>t;
-                if (app.f.kind === P.AstTypeKind.Name && (<any>app.f).name === "type") {
+                //if (app.f.kind === P.AstTypeKind.Name && (<any>app.f).name === "type") {
+                if (app.f.kind === P.AstKind.TypeName) {
                     // TODO: Only allow one parameter
                     var tv = app.params[0];
                     // TODO: tv.name must be null here
-                    this.resolveType(tv.type);
+                    tv.type = this.resolveType(tv.type);
                 }
                 return t;
             }
 
-            case P.AstTypeKind.Record: {
+            case P.AstKind.TypeRecord: {
                 var record = <P.AstTypeRecord>t;
-                record.f.forEach(a => this.resolveType(a.type));
+                record.f.forEach(a => a.type = this.resolveType(a.type));
                 return t;
             }
 
-            case P.AstTypeKind.Lambda: {
+            case P.AstKind.TypeLambda: {
                 var lambda = <P.AstTypeLambda>t;
-                lambda.p.forEach(a => this.resolveType(a.type));
-                lambda.f.forEach(a => this.resolveType(a.type));
+                lambda.p.forEach(a => a.type = this.resolveType(a.type));
+                this.resolveType(lambda.r);
                 return t;
             }
 
-            case P.AstTypeKind.Name: {
+            case P.AstKind.TypeName: {
                 var name = <P.AstTypeName>t;
                 var sym = this.findSymbol(name.name);
-                // TODO: Check that sym is a type
-                return sym;
+                if (sym) {
+                    // TODO: Check that sym is a type
+                    console.log("Found type symbol", name.name);
+                    return sym;
+                } else {
+                    return name;
+                }
             }
 
             default:
@@ -69,14 +75,23 @@ export class Compiler {
         this.scanContext.symbols[name] = sym;
     }
 
-
-
     findSymbol(name: string): any {
-        function find(name: string, sc: P.AstLambda) {
-            //if (!sc) return null;
-            if (!sc) throw "Did not find symbol " + name;
+        function find(name: string, sc: P.Case) {
             var val = sc.symbols[name];
             if (val) return val;
+            if (!sc.parent) {
+                /*
+                if (name[0] == '.') {
+                    // Synthesize dotted accessors
+                    // TODO: This is just a hack for now.
+                    val = { kind: P.AstKind.App };
+                    sc.symbols[name] = val;
+                    return val;
+                }
+                throw "Did not find symbol " + name;
+                */
+                return null;
+            }
             return find(name, sc.parent);
         }
         
@@ -99,13 +114,37 @@ export class Compiler {
         // value.type
     }
 
+    unifyTypes(a: P.AstType, b: P.AstType) {
+        if (!a) return a;
+        if (!b) return b;
+
+        if (a.kind === b.kind) {
+            return a; // TODO
+        }
+
+        throw "Types must be the same kind";
+    }
+
+    unifyTypeArrayInto(a: P.AstType[], b: P.AstType[]) {
+        if (!a) return b;
+        if (!b) return a;
+
+        if (a.length !== b.length) {
+            throw "Type lists have different number of types";
+        }
+
+        for (var i = 0, e = a.length; i < e; ++i) {
+            a[i] = this.unifyTypes(a[i], b[i]);
+        }
+    }
+
     scan(m: P.Ast, contextType: P.AstType) {
         if (!m) return;
 
         switch (m.kind) {
-            case P.AstKind.TypeVal: {
+            case P.AstKind.ValOfType: {
                 var typeVal = <P.AstTypeVal>m;
-                typeVal.type = { kind: P.AstTypeKind.TypeVal };
+                typeVal.type = { kind: P.AstKind.TypeValOfType };
                 typeVal.typeVal = this.resolveType(typeVal.typeVal);
                 break;
             }
@@ -131,7 +170,7 @@ export class Compiler {
                     // TODO
                     pendingAdding.forEach(p => {
                         var n = <P.AstName>p.name;
-                        console.log("Resolving pending node", n.name);
+                        //console.log("Resolving pending node", n.name);
                         this.scan(p.value, p.name.type);
                     });
 
@@ -142,41 +181,57 @@ export class Compiler {
                     lambda.scanState = P.ScanState.Scanning;
 
                     var oldScanContext = this.scanContext;
-                    this.scanContext = lambda;
+                    
+                    var ptypes: P.AstType[];
+                    var ftype: P.AstType;
 
-                    var ptypes = [];
+                    lambda.cases.forEach(c => {
+                        var casePtypes = [];
 
-                    // TODO: Use context type to fill in parameter types
-                    lambda.p.forEach(p => {
-                        if (p.name.kind === P.AstKind.Name) {
-                            this.scan(p.value, p.type);
+                        this.scanContext = c;
 
-                            var n = <P.AstName>p.name;
-                            this.addSymbol(n.name, { kind: P.AstKind.ParRef, name: n.name });
-                        }
-                        // TODO: Handle other patterns
+                        // TODO: Use context type to fill in parameter types
+                        c.p.forEach(p => {
+                            if (p.name.kind === P.AstKind.Name) {
+                                this.scan(p.value, p.type);
 
-                        ptypes.push(p.type)
-                    });
-
-                    lambda.f.forEach(f => {
-                        if (f.value.kind === P.AstKind.Lambda) {
+                                var n = <P.AstName>p.name;
+                                this.addSymbol(n.name, { kind: P.AstKind.ParRef, name: n.name });
+                            }
                             // TODO: Handle other patterns
-                            var n = <P.AstName>f.name;
-                            this.addSymbol(n.name, { kind: P.AstKind.ValRef, name: n.name });
-                            pendingAdding.push(f);
-                        } else {
-                            flushPending();
 
-                            this.scan(f.value, null); // TODO: Get a type from declaration
-                        }
+                            casePtypes.push(p.type)
+                        });
+
+                        c.f.forEach(f => {
+                            if (f.value.kind === P.AstKind.Lambda) {
+                                // TODO: Handle other patterns
+                                var n = <P.AstName>f.name;
+                                this.addSymbol(n.name, { kind: P.AstKind.ValRef, name: n.name });
+                                pendingAdding.push(f);
+                            } else {
+                                var n = <P.AstName>f.name;
+                                flushPending();
+
+                                this.scan(f.value, null); // TODO: Get a type from declaration
+                                if (n) {
+                                    // TODO: Assign to variable
+                                    this.addSymbol(n.name, { kind: P.AstKind.ValRef, name: n.name });
+                                }
+                            }
+                        });
+
+                        this.unifyTypeArrayInto(ptypes, casePtypes);
+
+                        P.assert(c.f.length > 0, "Functions with no bindings nor expressions are not yet supported");
+
+                        // TODO: Unify types of ptypes and ftype
+                        ftype = this.unifyTypes(ftype, c.f[c.f.length - 1].type); // TODO: Handle conditional returns
                     });
 
                     flushPending();
 
-                    var ftype = lambda.f[lambda.f.length - 1].type; // TODO: Handle conditional returns
-
-                    lambda.type = { kind: P.AstTypeKind.Lambda, p: ptypes, f: [ftype] };
+                    lambda.type = { kind: P.AstKind.TypeLambda, p: ptypes, f: [ftype] };
 
                     lambda.scanState = P.ScanState.Scanned;
                     this.scanContext = oldScanContext;
@@ -188,11 +243,16 @@ export class Compiler {
             case P.AstKind.Name: {
                 var name = <P.AstName>m;
                 var sym = this.findSymbol(name.name);
-                var ref = <P.AstValRef>m;
-                ref.kind = P.AstKind.ValRef;
-                // TODO: Handle type constructors
-                console.log("Found", name.name);
-                return sym;
+                if (sym) {
+                    var ref = <P.AstValRef>m;
+                    ref.kind = P.AstKind.ValRef;
+                    // TODO: Handle type constructors
+                    console.log("Found value symbol", name.name);
+                    console.log(ref);
+                    return sym;
+                } else {
+                    return name;
+                }
             }
         }
     }

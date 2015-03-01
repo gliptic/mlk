@@ -10,7 +10,7 @@
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <DebugType>full</DebugType>
     <DebugSymbols>true</DebugSymbols>
-    <TypeScriptToolsVersion>1.1</TypeScriptToolsVersion>
+    <TypeScriptToolsVersion>1.4</TypeScriptToolsVersion>
     <UseIISExpress>true</UseIISExpress>
     <IISExpressSSLPort />
     <IISExpressAnonymousAuthentication />
@@ -40,6 +40,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="contract.mlk" />
+    <Content Include="lowlevel.mlk" />
     <None Include="mlk.pubxml" />
     <None Include="web.Debug.config">
       <DependentUpon>web.config</DependentUpon>

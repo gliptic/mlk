@@ -19,6 +19,7 @@ function treeToString(x: parser.Ast, arr: string[], indent: number) {
         arr.push(parser.AstKind[x.kind]);
         switch (x.kind) {
             case parser.AstKind.Name:
+            case parser.AstKind.ValRef:
                 arr.push(' ');
                 arr.push((<parser.AstName>x).name);
                 break;
@@ -39,11 +40,12 @@ export function runCode(code: string, output: (x: string) => void): any {
 
         var c = new compiler.Compiler();
         var arr: string[] = [];
+        c.scan(m, null);
         treeToString(m, arr, 0);
         output(arr.join(''));
         //output(JSON.stringify(m));
         //output(JSON.stringify(m, undefined, 2));
-        c.scan(m, null);
+        
     } catch (e) {
         output("Compile error: " + e);
     }
@@ -67,9 +69,7 @@ function initCodeMirror(element, isInitialized, context) {
 
     codeMirror = CodeMirror(element, {
         lineNumbers: true,
-        value:
-        "Foo = :{ a => b }\n" +
-        "Bar = :[ a: Int ]"
+        value: ""
     });
     codeMirror.setOption("indentUnit", 4);
     codeMirror.setOption("extraKeys", {
@@ -145,7 +145,24 @@ var app = {
             result: m.prop(''),
             examples: [
                 { name: 'A', text: 'A', contents: 'a.b = 0' },
-                { name: 'B', text: 'B', contents: 'a.b = 0' }
+                {
+                    name: 'Fib',
+                    text: 'Fib',
+                    contents:
+                        'fib = { x: int -> \n' +
+                        '  if (x < 2) { 1 } \n' +
+                        '    else { fib(x - 2) + fib(x - 1) } \n' +
+                        '}'
+                },
+                {
+                    name: 'LowLevel',
+                    text: 'Low-level',
+                    contents:
+                        ':Pair = [ x: int, y: int ]\n\n' +
+                        'sum = { p: &Pair -> \n' +
+                        '  p.x = p.x + p.y \n' +
+                        '}'
+                }
             ],
             compile: (ctrl) => {
                 var code = codeMirror.getValue();
@@ -157,7 +174,7 @@ var app = {
         return [
             m('.navbar', [
                 m('.navbar-header', [
-                    m('a.navbar-brand', 'Mlk')
+                    m('a.navbar-brand', 'hyp')
                 ]),
                 m('.navbar-collapse', [
                     m('ul.nav.navbar-nav', [

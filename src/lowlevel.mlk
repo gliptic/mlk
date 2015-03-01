@@ -1,0 +1,57 @@
+﻿:Pair = [
+	x: Int
+	y: Int
+]
+
+v = { s: Pair =>
+	
+}
+
+p = { s: &Pair =>
+	s.x = s.x + s.y
+	if (s.x == 0) {
+		
+	} else {
+
+	}
+
+	o = Pair[x = 0, y = 1]
+
+	while (s.y == 0) {
+		p(&o)
+		v(o)
+	}
+}
+
+---->
+
+function v() {
+	// s is at 'stack'
+	stack = (stack + 8)|0;
+}
+
+function p(s) {
+	var o = 0;
+	stack = (stack - 8)|0;
+	
+	I32[s>>2] = (I32[s>>2] + I32[(s + 4)>>2])|0;
+	if (I32[s>>2] == 0) {
+
+	} else {
+
+	}
+
+	o = stack|0;
+	I32[stack >> 2] = 0;
+	I32[(stack + 4) >> 2] = 1;
+
+	while (I32[(s + 4)>>2] == 0) {
+		p(o);
+		stack = (stack - 8)|0;
+		I32[stack >> 2] = I32[(stack + 8) >> 2];
+		I32[(stack + 4) >> 2] = I32[(stack + 12) >> 2];
+		v();
+	}
+
+	stack = (stack + 8)|0;
+}
