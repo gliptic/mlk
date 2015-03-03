@@ -20,6 +20,7 @@
   <ItemGroup>
     <Content Include="amd.js" />
     <Content Include="app.css" />
+    <Content Include="asmjstest.js" />
     <Content Include="codemirror-compressed.js" />
     <Content Include="codemirror.css" />
     <Content Include="dark-theme.css" />

@@ -240,7 +240,6 @@ export class Compiler {
 
                         P.assert(c.f.length > 0, "Functions with no bindings nor expressions are not yet supported");
 
-                        // TODO: Unify types of ptypes and ftype
                         ftype = this.unifyTypes(ftype, c.f[c.f.length - 1].type); // TODO: Handle conditional returns
                     });
 
